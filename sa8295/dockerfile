@@ -1,0 +1,72 @@
+# syntax=docker/dockerfile:1.2
+
+FROM ubuntu:22.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get -y upgrade && \
+apt-get -y install git nano build-essential flex bison zip unzip curl screen \
+gnupg zlib1g-dev libncurses5 x11proto-core-dev libx11-dev libgl1-mesa-dev gperf \
+libc6-dev libxml2-utils xsltproc fontconfig openjdk-17-jdk libncurses6 procps \
+gcc-multilib g++-multilib libc6-dev-i386 lib32ncurses5-dev lib32z1-dev ccache \
+gnupg rsync lib32z1-dev python2.7 && ln -sf /usr/bin/python2.7 /usr/bin/python \
+&& adduser --system --group --uid 1000 --home /home/aosp aosp
+
+RUN git config --global http.followRedirects true
+
+# see https://source.android.com/setup/develop#installing-repo
+RUN curl -o /usr/local/bin/repo https://storage.googleapis.com/git-repo-downloads/repo-1 && chmod a+x /usr/local/bin/repo
+
+VOLUME /aosp
+VOLUME /ccache
+
+USER aosp
+
+RUN echo "alias lstat=\"stat -L\"" >> /home/aosp/.bashrc \
+&& echo "export USE_CCACHE=1" >> /home/aosp/.bashrc \
+&& echo "export CCACHE_EXEC=/usr/bin/ccache" >> /home/aosp/.bashrc \
+&& echo "export CCACHE_DIR=/ccache" >> /home/aosp/.bashrc \
+&& echo "ccache -M 50G > /dev/null" >> /home/aosp/.bashrc
+
+WORKDIR /aosp
+
+RUN mkdir VENDOR_OSS_DIR && cd VENDOR_OSS_DIR && repo init --depth=1 -u https://git.codelinaro.org/clo/la/la/vendor/manifest.git -b release -m AU_LINUX_ANDROID_LA_AU.VENDOR.14.0.0.R3.11.00.00.1123.045.xml --repo-url=https://git.codelinaro.org/clo/tools/repo.git --repo-branch=qc-stable --no-clone-bundle \
+&& cd ..
+
+RUN mkdir SYSTEM_OSS_DIR && cd SYSTEM_OSS_DIR && repo init --depth=1 -u https://git.codelinaro.org/clo/la/la/system/manifest.git -b release -m AU_LINUX_ANDROID_LA_AU.QSSI.14.0.0.R1.11.00.00.1080.067.xml --repo-url=https://git.codelinaro.org/clo/tools/repo.git --repo-branch=qc-stable --no-clone-bundle \
+&& cd ..
+
+RUN mkdir KERNEL_OSS_DIR && cd KERNEL_OSS_DIR && repo init --depth=1 -u https://git.codelinaro.org/clo/la/kernelplatform/manifest.git -b release -m AU_LINUX_KERNEL.PLATFORM.3.0.R3.00.00.00.037.089.xml --repo-url=https://git.codelinaro.org/clo/tools/repo.git --repo-branch=qc-stable --no-clone-bundle \
+&& cd ..
+
+#original
+#RUN mkdir PROP_DIR && cd PROP_DIR && git clone -b r00002.1 --depth 1 https://paulojorge.martinho%40capgemini.com:password@chipmaster2.qti.qualcomm.com/home2/git/96491/sa8295p-hqx-4-5-6-0_hlos_dev_sdp-la.git && cd ..
+
+# test - to be removed
+USER root
+RUN --mount=type=secret,id=repo,target=/root/repo_url.txt cat /root/repo_url.txt
+RUN --mount=type=secret,id=repo,target=/root/repo_url.txt \
+    mkdir PROP_DIR && cd PROP_DIR && \
+    git clone -b r00002.1 --depth 1 "$(head -n 1 /root/repo_url.txt)"
+
+RUN mkdir VENDOR_BUILD_DIR && cd VENDOR_BUILD_DIR
+#&& cp -r ../VENDOR_OSS_DIR/* . \
+#&& cp -r ../SYSTEM_OSS_DIR/* . \
+#&& cp -r ../KERNEL_OSS_DIR/.repo . \
+#&& cp -r ../KERNEL_OSS_DIR/kernel_platform . \
+#&& cp -r ../PROP_DIR/sa8295p-hqx-4-5-6-0_hlos_dev_sdp-la/apps_kernel/kernel_platform/qcom/ kernel_platform/ \
+#&& cp -r ../PROP_DIR/sa8295p-hqx-4-5-6-0_hlos_dev_sdp-la/lagvm_qssi/LINUX/android/vendor/qcom/proprietary/ vendor/qcom/ \
+#&& cp -r ../PROP_DIR/sa8295p-hqx-4-5-6-0_hlos_dev_sdp-la/lagvm/LINUX/android/vendor/qcom/proprietary/ vendor/qcom/ \
+#&& rm -rf ../VENDOR_OSS_DIR \
+#&& rm -rf ../SYSTEM_OSS_DIR \
+#&& rm -rf ../KERNEL_OSS_DIR/.repo \
+#&& rm -rf ../KERNEL_OSS_DIR/kernel_platform \
+#&& rm -rf ../PROP_DIR/sa8295p-hqx-4-5-6-0_hlos_dev_sdp-la/apps_kernel/kernel_platform/qcom/ \
+#&& rm -rf ../PROP_DIR/sa8295p-hqx-4-5-6-0_hlos_dev_sdp-la/lagvm_qssi/LINUX/android/vendor/qcom/proprietary/ \
+#&& rm -rf ../PROP_DIR/sa8295p-hqx-4-5-6-0_hlos_dev_sdp-la/lagvm/LINUX/android/vendor/qcom/proprietary/
+
+#repo sync -j4 --no-clone-bundle 
+
+#RUN repo init --partial-clone --no-use-superproject -b android-14.0.0_r22 -u https://android.googlesource.com/platform/manifest --depth=1
+
+CMD ["bash"]
